@@ -1,0 +1,219 @@
+#version 460
+#extension GL_GOOGLE_include_directive		: enable
+#extension GL_ARB_separate_shader_objects	: enable
+#extension GL_ARB_shading_language_420pack	: enable
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "raystructs.glslh"
+
+layout(location = 0) rayPayloadEXT BasicPayload payload;
+
+layout(set = 0, binding = 0) uniform accelerationStructureEXT tlas;
+
+layout(set = 1, binding = 0) uniform CameraInfo {
+	mat4 viewMatrix;
+	mat4 projMatrix;
+};
+
+layout(set = 2, binding = 0) uniform InverseCameraInfo {
+	mat4 invViewMatrix;
+	mat4 invProjMatrix;
+};
+
+layout(set = 2, binding = 1) uniform CameraPositionInfo {
+	vec3 cameraPos;
+};
+
+layout(set = 2, binding = 2) uniform RenderTypeInfo {
+	int renderType;
+};
+
+layout(set = 3, binding = 0, rgba32f) uniform image2D image;
+
+layout(set = 4, binding = 1) buffer SampleData {
+	int sampleSize[];
+};
+
+void main() {
+    //bool superSampling = true;
+
+    if(renderType != 0 && gl_LaunchIDEXT.x % 3 == 0 && gl_LaunchIDEXT.y % 3 == 0) {
+        uint  rayFlags = gl_RayFlagsOpaqueEXT;
+        float tMin     = 0.001;
+        float tMax     = 10000.0;
+        vec4 origin    = invViewMatrix * vec4(0, 0, 0, 1);
+        vec3 result    = vec3(0);
+
+        payload.shadow_count = -1;  // -1: default;  0, 1 ... how many shadows it is in
+        payload.extraSample = 0;
+
+        const vec2 pixelCenter[9] = {
+            vec2(gl_LaunchIDEXT.x + 1, gl_LaunchIDEXT.y + 1) + vec2(0.5),
+            vec2(gl_LaunchIDEXT.xy) + vec2(0.5),
+            vec2(gl_LaunchIDEXT.x + 2, gl_LaunchIDEXT.y) + vec2(0.5),
+            vec2(gl_LaunchIDEXT.x, gl_LaunchIDEXT.y + 2) + vec2(0.5),
+            vec2(gl_LaunchIDEXT.x + 2, gl_LaunchIDEXT.y + 2) + vec2(0.5),
+            vec2(gl_LaunchIDEXT.x + 1, gl_LaunchIDEXT.y) + vec2(0.5),
+            vec2(gl_LaunchIDEXT.x, gl_LaunchIDEXT.y + 1) + vec2(0.5),
+            vec2(gl_LaunchIDEXT.x + 2, gl_LaunchIDEXT.y + 1) + vec2(0.5),
+            vec2(gl_LaunchIDEXT.x + 1, gl_LaunchIDEXT.y + 2) + vec2(0.5),
+        };
+
+        const vec2 inUV[9] = {
+            pixelCenter[0] / vec2(gl_LaunchSizeEXT.xy),
+            pixelCenter[1] / vec2(gl_LaunchSizeEXT.xy),
+            pixelCenter[2] / vec2(gl_LaunchSizeEXT.xy),
+            pixelCenter[3] / vec2(gl_LaunchSizeEXT.xy),
+            pixelCenter[4] / vec2(gl_LaunchSizeEXT.xy),
+            pixelCenter[5] / vec2(gl_LaunchSizeEXT.xy),
+            pixelCenter[6] / vec2(gl_LaunchSizeEXT.xy),
+            pixelCenter[7] / vec2(gl_LaunchSizeEXT.xy),
+            pixelCenter[8] / vec2(gl_LaunchSizeEXT.xy)
+        };
+
+        vec2 d[9] = {
+            inUV[0] * 2.0 - 1.0,
+            inUV[1] * 2.0 - 1.0,
+            inUV[2] * 2.0 - 1.0,
+            inUV[3] * 2.0 - 1.0,
+            inUV[4] * 2.0 - 1.0,
+            inUV[5] * 2.0 - 1.0,
+            inUV[6] * 2.0 - 1.0,
+            inUV[7] * 2.0 - 1.0,
+            inUV[8] * 2.0 - 1.0
+        };
+
+        vec4 target[9] = {
+            invProjMatrix * vec4(d[0].x, d[0].y, 1, 1),
+            invProjMatrix * vec4(d[1].x, d[1].y, 1, 1),
+            invProjMatrix * vec4(d[2].x, d[2].y, 1, 1),
+            invProjMatrix * vec4(d[3].x, d[3].y, 1, 1),
+            invProjMatrix * vec4(d[4].x, d[4].y, 1, 1),
+            invProjMatrix * vec4(d[5].x, d[5].y, 1, 1),
+            invProjMatrix * vec4(d[6].x, d[6].y, 1, 1),
+            invProjMatrix * vec4(d[7].x, d[7].y, 1, 1),
+            invProjMatrix * vec4(d[8].x, d[8].y, 1, 1)
+        };
+
+        vec4 direction[9] = {
+            invViewMatrix * vec4(normalize(target[0].xyz), 0),
+            invViewMatrix * vec4(normalize(target[1].xyz), 0),
+            invViewMatrix * vec4(normalize(target[2].xyz), 0),
+            invViewMatrix * vec4(normalize(target[3].xyz), 0),
+            invViewMatrix * vec4(normalize(target[4].xyz), 0),
+            invViewMatrix * vec4(normalize(target[5].xyz), 0),
+            invViewMatrix * vec4(normalize(target[6].xyz), 0),
+            invViewMatrix * vec4(normalize(target[7].xyz), 0),
+            invViewMatrix * vec4(normalize(target[8].xyz), 0)
+        };
+
+        traceRayEXT(tlas,             // acceleration structure
+                    rayFlags,         // rayFlags
+                    0xFF,             // cullMask
+                    0,                // sbtRecordOffset
+                    0,                // sbtRecordStride
+                    0,                // missIndex
+                    origin.xyz,       // ray origin
+                    tMin,             // ray min range
+                    direction[0].xyz, // ray direction
+                    tMax,             // ray max range
+                    0                 // payload (location = 0)
+        );
+        result += payload.hitValue;
+
+        float sample_size;
+        
+        if(renderType == 1) {  // dynamic supersampling
+            if(payload.objectIndex != -1)  {
+                sample_size = sampleSize[payload.objectIndex];  // the texture frequency
+                //sample_size *= payload.extraSample;             // Area Completion
+                //sample_size = (min(sample_size, 9));
+            }
+            else {
+                sample_size = 1; // skybox
+            }
+        } 
+        else {  // full-scene supersampling
+            sample_size = 9;
+        }
+
+        if(sample_size > 1) {
+            for(int i = 1; i < sample_size; ++i) {
+                traceRayEXT(tlas,         // acceleration structure
+                        rayFlags,         // rayFlags
+                        0xFF,             // cullMask
+                        0,                // sbtRecordOffset
+                        0,                // sbtRecordStride
+                        0,                // missIndex
+                        origin.xyz,       // ray origin
+                        tMin,             // ray min range
+                        direction[i].xyz, // ray direction
+                        tMax,             // ray max range
+                        0                 // payload (location = 0)
+                );
+                result += payload.hitValue;
+            }
+
+            result /= sample_size;
+        }
+
+        // calculate shadow
+        if(payload.shadow_count > 0) { // It is in the shadow
+            for(int i = 0; i < payload.shadow_count; i++) {
+                float ambientStrength = 0.5f;
+                // vec3 lightColor = parallelLight[i].color;
+                vec3 lightColor = vec3(1,1,1);
+                vec3 shadowAmbient = ambientStrength * lightColor;
+                result = shadowAmbient * result;
+            }
+        }
+
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy) / 3, vec4(result, 1.0));
+        
+    }
+
+    // default
+    else {
+        const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+        const vec2 inUV        = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
+        vec2       d           = inUV * 2.0 - 1.0;
+
+        vec4 target    = invProjMatrix * vec4(d.x, d.y, 1, 1);
+        vec4 origin    = invViewMatrix * vec4(0, 0, 0, 1);
+  
+        vec4 direction = invViewMatrix * vec4(normalize(target.xyz), 0);
+
+        // origin    = vec4(0,0,0,1);
+        // direction = vec4(0,0,-1,1);
+
+        uint  rayFlags = gl_RayFlagsOpaqueEXT;
+        float tMin     = 0.001;
+        float tMax     = 10000.0;
+
+        traceRayEXT(tlas,             // acceleration structure
+                    rayFlags,         // rayFlags
+                    0xFF,             // cullMask
+                    0,                // sbtRecordOffset
+                    0,                // sbtRecordStride
+                    0,                // missIndex
+                    origin.xyz,       // ray origin
+                    tMin,             // ray min range
+                    direction.xyz,    // ray direction
+                    tMax,             // ray max range
+                    0                 // payload (location = 0)
+        );
+
+        if(payload.shadow_count > 0) {
+            for(int i = 0; i < payload.shadow_count; i++) {
+                float ambientStrength = 0.5f;
+                vec3 lightColor = vec3(1,1,1); // parallelLight[i].color;
+                vec3 shadowAmbient = ambientStrength * lightColor;
+                payload.hitValue = shadowAmbient * payload.hitValue;                
+            }
+        }
+
+        imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(payload.hitValue, 1.0));
+    }
+
+}

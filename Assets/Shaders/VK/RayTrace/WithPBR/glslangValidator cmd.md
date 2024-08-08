@@ -1,0 +1,1 @@
+glslangValidator -V --target-env vulkan1.3 *inputFileName -o *outputFileName
