@@ -349,11 +349,11 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
-/Assets/GLTF/DamagedHelmet
-/Assets/GLTF/Sponza
-/Assets/GLTF/SimpleSkin
-/Assets/GLTF/RiggedSimple
-/Assets/GLTF/CesiumMan
+# /Assets/GLTF/DamagedHelmet
+# /Assets/GLTF/Sponza
+# /Assets/GLTF/SimpleSkin
+# /Assets/GLTF/RiggedSimple
+# /Assets/GLTF/CesiumMan
 /Plugins/GLTFLoader/GLTFLoader.vcxproj.filters
 /Plugins/GLTFLoader/GLTFLoader.vcxproj
 /Common/Common.vcxproj.filters
