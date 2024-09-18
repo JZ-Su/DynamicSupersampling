@@ -47,6 +47,8 @@ The codebase has a number of Vulkan-based tutorials that explore both Vulkan API
 | AsyncComputeExample |  Modern GPUs can often execute rasterisation and compute shaders simultaneously. This example looks how how to generate vertex information in a compute shader, and how to correctly wait for this data to be ready for a vertex shader invocation.   |
 | DescriptorBufferExample |  Some GPUs can store descriptor handles in a buffer, instead of a number of opaque descriptor 'sets'. In this example a basic usage of this is shown, demonstrating how to create descriptor buffers, and how to fill them with descriptor handles.   |
 | TestGLTFRayTrace |  Ray tracing is becoming increasingly popular, and presents a vastly different model to rendering than a traditional rasterisation-based shader pipeline. This example shows how to load a scene from a GLTF file, and how to create the ray tracing pipelines and data required to correctly render it.   |
+| RayTracingWithPBR |  The dissertation project.   |
+
 
 
 For example, adding __-Example TestGLTFRayTrace__ to the command line will start the program with a ray tracing scene.
