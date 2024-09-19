@@ -137,9 +137,12 @@ void main() {
 	color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));
 
+	// shadow switch
+	bool useShadow = false;
+
 	// only identify if it is in the shadow once
 	// when the payload is default
-	if(payload.shadow_count == -1) {
+	if(useShadow && payload.shadow_count == -1) {
 		payload.shadow_count = 0;
 
 		vec3 rayOrigin = hitPos + hitNormal * 0.0001;
